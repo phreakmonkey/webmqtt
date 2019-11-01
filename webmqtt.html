@@ -23,7 +23,8 @@ const PORT = 9001;
 const ignoreChar = '_';
 
 var devices = [];
-var client = new Paho.MQTT.Client(HOST, PORT, "clientID");
+var clientID = Math.random().toString(36).substring(2, 15);
+var client = new Paho.MQTT.Client(HOST, PORT, clientID);
 client.onConnectionLost = onConnectionLost;
 client.onMessageArrived = onMessageArrived;
 client.connect({onSuccess:onConnect});
@@ -43,6 +44,7 @@ function onConnectionLost(responseObject) {
   if (responseObject.errorCode !== 0) {
     console.log("onConnectionLost:"+responseObject.errorMessage);
   }
+  client = new Paho.MQTT.Client(HOST, PORT, clientID);
 }
 
 function hasDevice(name) {
