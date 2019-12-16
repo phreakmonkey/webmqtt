@@ -38,7 +38,7 @@ function Sonoff(name, power) {
 function onConnect() {
   console.log("onConnect");
   client.subscribe("stat/#");
-  //client.subscribe("tele/#");
+  client.subscribe("tele/+/LWT");
 }
 
 function onConnectionLost(responseObject) {
@@ -116,7 +116,7 @@ function toggleSwitch(device) {
 function onMessageArrived(message) {
   var msplit = message.destinationName.split("/");
   var device = msplit[1];
-  if (!hasDevice(device)) {
+  if (msplit[2] == 'LWT' && message.payloadString == 'Online' && !hasDevice(device)) {
     devices.push(new Sonoff(device, false));
     devices.sort(function(a, b) {
       var x = a.name.toLowerCase();
