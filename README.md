@@ -7,11 +7,13 @@ cloudfare hosted mqttws31.js with your own.)
 
 ### Requirements:
 * MQTT-over-WS enabled on your MQTT Server
-* "Power Retain" turned on in Tasmota
+* "Power Retain" turned on in Tasmota (cmnd/Device/PowerRetain ON)
 
 ### Config:
 There are three variables you can configure in webmqtt.html:
 * HOST = "mqtt"  <- put the hostname of your MQTT server here
 * PORT = 9001    <- put the port number of the MQTT-WEBSOCKET listener
 * ignoreChar = "_" <- MQTT topics that start with this character will be ignored
-
+-----
+![WebMQTT](https://cdn.phreakmonkey.com/misc/webmqtt-screenshot.png "WebMQTT Screenshot")
+-----
