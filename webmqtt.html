@@ -37,8 +37,8 @@ function Sonoff(name, power) {
 
 function onConnect() {
   console.log("onConnect");
-  client.subscribe("stat/#");
   client.subscribe("tele/+/LWT");
+  client.subscribe("stat/#");
 }
 
 function onConnectionLost(responseObject) {
