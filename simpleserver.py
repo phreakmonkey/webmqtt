@@ -1,13 +1,13 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
-__version__ = '0.1'
+__version__ = '0.9'
 
-import BaseHTTPServer, select, signal, socket, SocketServer, urlparse
+import http.server, select, signal, socket, socketserver, urllib.parse
 import logging
 import logging.handlers
 import os
 import sys
-import urllib2
+import urllib.request, urllib.error, urllib.parse
 
 class TimeoutError(Exception):
   pass
@@ -18,8 +18,8 @@ def SIGALRM_handler(sig, stack):
 signal.signal(signal.SIGALRM, SIGALRM_handler)
 
 
-class RequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
-  __base = BaseHTTPServer.BaseHTTPRequestHandler
+class RequestHandler(http.server.BaseHTTPRequestHandler):
+  __base = http.server.BaseHTTPRequestHandler
   __base_handle = __base.handle
   server_version = "HTTPHandler/" + __version__
 
@@ -40,25 +40,67 @@ class RequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
     self.send_header('Location', location)
     self.end_headers()
 
+  def _safe(self, fname):
+    if fname[0] == '.':
+      return False
+    safechars = ('abcdefghijklmnopqrstuvwxyz'
+                 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+                 '0123456789._- ')
+    for x in fname:
+      if x not in safechars:
+        return False
+    return True
+
   def do_GET(self):
-    if self.path == '/':                             
-      with open('webmqtt.html', 'r') as hfile:
+    # Add additional files to serve here.
+    # "URL" : "filename"
+    routes = {
+      '/': 'webmqtt.html',
+      '/rssi': 'rssi.html',
+      '/webint': 'webint.html',
+      '/config.js': 'config.js',
+    }
+
+    if self.path in routes:
+      fname = routes[self.path]
+      with open(fname, 'rb') as hfile:
         content = hfile.read()
       self.send_response(200)
-      self.send_header('Content-type', 'text/html')
+      if fname.endswith('.html'):
+        self.send_header('Content-type', 'text/html')
+      elif fname.endswith('.js'):
+        self.send_header('Content-type', 'text/javascript')
       self.end_headers()
       self.wfile.write(content)
       return
-
-    self._redirect("/")
+    elif self.path.startswith('/firmware/'):
+      fname = self.path.split('/')[2]
+      if not fname or not self._safe(fname):
+        self.send_error(418)
+        return
+      try:
+        with open(f'firmware/{fname}', 'rb') as fw:
+          content = fw.read()
+      except FileNotFoundError:
+          self.send_error(404)
+          return
+      self.send_response(200)
+      self.send_header('Content-type', 'application/octet-stream')
+      self.send_header('Content-length', str(len(content)))
+      self.end_headers()
+      self.wfile.write(content)
+      return
+    else:
+      self._redirect("/")
+      return
 
   do_POST = do_GET
   do_HEAD = do_GET
   do_PUT = do_GET
 
 
-class ThreadingHTTPServer(SocketServer.ThreadingMixIn,
-                          BaseHTTPServer.HTTPServer):
+class ThreadingHTTPServer(socketserver.ThreadingMixIn,
+                          http.server.HTTPServer):
   pass
 
 
