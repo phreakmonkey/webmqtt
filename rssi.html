@@ -17,8 +17,10 @@
            transition-duration:0.4s; }
   tr.spaceUnder > td { padding-bottom: 1em; }
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.js" type="text/javascript"></script>
-
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/1.7.1/jquery.min.js" 
+type="text/javascript"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.js"
+ type="text/javascript"></script>
 <script src="config.js" type="text/javascript"></script>
 <script>
 var devices = [];
@@ -28,15 +30,16 @@ client.onConnectionLost = onConnectionLost;
 client.onMessageArrived = onMessageArrived;
 client.connect({onSuccess:onConnect});
 
-function Tasmota(name, power) {
+function Tasmota(name, rssi) {
   this.name = name;
-  this.power = power;
+  this.rssi = rssi;
 }
 
 function onConnect() {
   console.log("onConnect");
+  client.subscribe("tele/+/STATE");
+  client.subscribe("stat/+/RESULT");
   client.subscribe("tele/+/LWT");
-  client.subscribe("stat/#");
 }
 
 function onConnectionLost(responseObject) {
@@ -56,41 +59,43 @@ function hasDevice(name) {
   return false;
 }
 
-function setPower(name, power) {
+function setRSSI(name, rssi) {
   var aLen = devices.length;
   for (var i=0; i < aLen; i++) {
     if (devices[i].name == name) {
-      devices[i].power = power;
-      var butt = document.querySelector("#"+devices[i].name);
-      if (butt !== null) {
-        if (power) { butt.style = "background-color:#06cba"; }
-        else { butt.style = "background-color:#505050"; }
-      }
-      console.log(name + " set " + power);
+      devices[i].rssi = rssi;
+      console.log(name + " set " + rssi);
       break;
     }
   }
 }
 
-function drawButtons() {
-  var prevElement = "#switches";
+function loadTable(tableId, fields, data) {
+    //$('#' + tableId).empty(); //not really necessary
+    var rows = '';
+    $.each(data, function(index, item) {
+        var row = '<tr>';
+        $.each(fields, function(index, field) {
+            row += '<td>' + item[field+''] + '</td>';
+        });
+        rows += row + '<tr>';
+    });
+    $('#' + tableId).html(rows);
+}
+
+function drawTable() {
+  var prevElement = "#devices";
   for (var i=0; i < devices.length; i++) {
     if (document.querySelector("#"+devices[i].name+"_DIV") === null) {
       if (devices[i].name[0] == ignoreChar) { continue; }
       console.log("Drawing " + devices[i].name);
       console.log("Selecting " + prevElement);
       var sect = document.querySelector(prevElement);
-      // Make button:
-      var butt = document.createElement("button");
-      butt.addEventListener('click', function() { toggleSwitch(this.id) });
-      butt.textContent = devices[i].name;
-      butt.id = devices[i].name;
-      butt.style = "background-color:#505050";
       // Make DIV:
       var buttDIV = document.createElement("div");
       buttDIV.id = devices[i].name+"_DIV";
       buttDIV.style = "width:100%";
-      buttDIV.appendChild(butt);
+      buttDIV.textcontent = devices[i].name
       if (i < devices.length - 1 &&
           document.querySelector("#"+devices[i+1].name+"_DIV") !== null) {
         console.log("insertBefore " + devices[i+1].name+"_DIV");
@@ -99,43 +104,48 @@ function drawButtons() {
       else {
         sect.appendChild(buttDIV);
       }
+      // PUT RSSI DIV HERE:
     }
     //prevElement = "#"+devices[i].name;
   }
 }
     
-function toggleSwitch(device) {
-  var message = new Paho.MQTT.Message("TOGGLE");
-  message.destinationName = "cmnd/" + device + "/POWER";
-  client.send(message);
-  console.log("TOGGLE "+device);
-}
-  
 function onMessageArrived(message) {
   var msplit = message.destinationName.split("/");
   var device = msplit[1];
-  if (msplit[2] == 'LWT' && message.payloadString == 'Online' && !hasDevice(device)) {
-    devices.push(new Tasmota(device, false));
+  // Poll LWT Online devices
+  if (msplit[0] == 'tele' && msplit[2] == 'LWT' && message.payloadString == 'Online') {
+    if (!hasDevice(device)) {
+      devices.push(new Tasmota(device, 0));
+    }
+    let poll = new Paho.MQTT.Message('');
+    poll.destinationName = 'cmnd/' + device + '/STATE';
+    client.send(poll);
+    console.log('POLL ' + device);
+  }
+  // Process incoming STATE / RESULT messages:
+  if ((msplit[0] == 'tele' && msplit[2] == 'STATE') || 
+      (msplit[0] == 'stat' && msplit[2] == 'RESULT')) {
+    dstate = JSON.parse(message.payloadString);
+    setRSSI(device, dstate.Wifi.RSSI);
     devices.sort(function(a, b) {
-      var x = a.name.toLowerCase();
-      var y = b.name.toLowerCase();
-      if (x < y) {return -1;}
-      if (x > y) {return 1;}
+      var x = a.rssi;
+      var y = b.rssi;
+      if (x < y) {return 1;}
+      if (x > y) {return -1;}
       return 0;
     });
-    drawButtons();
   }
-  if (msplit[0] == 'stat' && msplit[2] == 'POWER') {
-    setPower(device, message.payloadString == 'ON');
-  }
+  loadTable('data-table', ['name', 'rssi'], devices);
 }
 </script>
 
 <div style='text-align:center;display:inline-block;min-width:260px;'>
-<h3>Switches</h3>
-<p id="switches">
-
-</p>
+<h3>WiFi RSSI</h3>
+<table id="data-table">
+    <tr><td>There are no items...</td></tr>
+</table>
+<br><br>
 </div>
 </body>
 </html>
